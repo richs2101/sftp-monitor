@@ -1,27 +1,31 @@
 from flask import Flask, jsonify
-import socket
+import paramiko
+import os
 
 app = Flask(__name__)
 
-HOST = "gl-n8.galactichosting.net"
-PORT = 2022
-
-def is_port_open(host, port):
-    try:
-        with socket.create_connection((host, port), timeout=5):
-            return True
-    except Exception:
-        return False
+# Configuration from environment variables
+HOST = os.getenv("SFTP_HOST", "gl-n8.galactichosting.net")
+PORT = int(os.getenv("SFTP_PORT", 2022))
+USERNAME = os.getenv("SFTP_USERNAME", "")
+PASSWORD = os.getenv("SFTP_PASSWORD", "")
 
 @app.route("/")
-def health_check():
-    status = "ONLINE" if is_port_open(HOST, PORT) else "OFFLINE"
+def home():
     return jsonify({
-        "host": HOST,
-        "port": PORT,
-        "protocol": "SFTP",
-        "status": status
-    }), 200 if status == "ONLINE" else 503
+        "message": "SFTP Monitor is running.",
+        "endpoints": ["/health"]
+    }), 200
+
+@app.route("/health")
+def health_check():
+    try:
+        transport = paramiko.Transport((HOST, PORT))
+        transport.connect(username=USERNAME, password=PASSWORD)
+        transport.close()
+        return jsonify({"status": "OK"}), 200
+    except Exception as e:
+        return jsonify({"status": "FAILED", "error": str(e)}), 503
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
